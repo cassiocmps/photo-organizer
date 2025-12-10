@@ -8,6 +8,8 @@ public class GeocodingService
     private readonly HttpClient _httpClient;
     private readonly List<LocationCacheItem> _locationCache = new();
     private const double CacheDistanceKm = 10.0;
+    private const int MaxRetryAttempts = 3;
+    private const int BaseDelayMs = 2000; // Increased from 1000ms
 
     public GeocodingService()
     {
@@ -45,29 +47,43 @@ public class GeocodingService
 
     private async Task<string> FetchCityFromApiAsync(double latitude, double longitude)
     {
-        try
+        for (int attempt = 0; attempt < MaxRetryAttempts; attempt++)
         {
-            var url = $"https://nominatim.openstreetmap.org/reverse?lat={latitude.ToString("F6", CultureInfo.InvariantCulture)}&lon={longitude.ToString("F6", CultureInfo.InvariantCulture)}&format=json&addressdetails=1";
-            
-            await Task.Delay(1000);
-            
-            var response = await _httpClient.GetStringAsync(url);
-            var result = System.Text.Json.JsonSerializer.Deserialize<NominatimResponse>(response);
+            try
+            {
+                var url = $"https://nominatim.openstreetmap.org/reverse?lat={latitude.ToString("F6", CultureInfo.InvariantCulture)}&lon={longitude.ToString("F6", CultureInfo.InvariantCulture)}&format=json&addressdetails=1";
+                
+                // Exponential backoff: 2s, 4s, 8s
+                int delay = BaseDelayMs * (int)Math.Pow(2, attempt);
+                await Task.Delay(delay);
+                
+                var response = await _httpClient.GetStringAsync(url);
+                var result = System.Text.Json.JsonSerializer.Deserialize<NominatimResponse>(response);
 
-            var city = result?.Address?.City 
-                       ?? result?.Address?.Town 
-                       ?? result?.Address?.Village 
-                       ?? result?.Address?.Municipality
-                       ?? result?.Address?.County
-                       ?? "Unknown Location";
+                var city = result?.Address?.City 
+                           ?? result?.Address?.Town 
+                           ?? result?.Address?.Village 
+                           ?? result?.Address?.Municipality
+                           ?? result?.Address?.County
+                           ?? "Unknown Location";
 
-            return city;
+                return city;
+            }
+            catch (HttpRequestException ex) when (ex.Message.Contains("429") && attempt < MaxRetryAttempts - 1)
+            {
+                // Rate limited - retry with exponential backoff
+                Console.WriteLine($"Rate limited geocoding ({latitude}, {longitude}). Retrying attempt {attempt + 2}/{MaxRetryAttempts}...");
+                continue;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error geocoding ({latitude}, {longitude}): {ex.Message}");
+                return "Unknown Location";
+            }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error geocoding ({latitude}, {longitude}): {ex.Message}");
-            return "Unknown Location";
-        }
+        
+        Console.WriteLine($"Failed to geocode ({latitude}, {longitude}) after {MaxRetryAttempts} attempts.");
+        return "Unknown Location";
     }
 
     private static double CalculateHaversineDistance(double lat1, double lon1, double lat2, double lon2)

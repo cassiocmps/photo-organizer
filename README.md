@@ -23,7 +23,8 @@ Console application in C# .NET 10 for intelligently organizing photo backups, wi
 - **Haversine Formula**: Calculates distance between coordinates
 - **Reuse**: If distance < 10km, reuses city from cache
 - **OpenStreetMap API (Nominatim)**: Free and respectful geocoding
-- **1-second delay**: Respects Nominatim API limits
+- **Exponential Backoff**: Automatic retry with 2s, 4s, 8s delays
+- **Rate Limit Handling**: Detects HTTP 429 errors and retries up to 3 times
 - **Custom User-Agent**: Required by Nominatim
 - **Thread-safe caching**: Safe for concurrent access
 
@@ -148,6 +149,8 @@ Processing 150/1523...
   ? Duplicate found: IMG_4567_copy.jpg
 Processing 523/1523...
   ? Error processing corrupted_file.jpg: File corrupted
+Processing 850/1523...
+Rate limited geocoding (40.7128, -74.0060). Retrying attempt 2/3...
 
 Processing 1523/1523...
 
@@ -168,6 +171,7 @@ Errors: 2
 - Photos without GPS ? `{Year}/`
 - All folders at the same level (no nesting)
 - Processed in parallel using multiple threads
+- Automatic retry on rate limit errors
 
 ## ??? Architecture
 
@@ -221,10 +225,19 @@ d = 2R × arcsin(?(sin²(??/2) + cos(?1) × cos(?2) × sin²(??/2)))
 4. If not ? calls Nominatim API and adds to cache
 5. **Result**: 95%+ reduction in API calls for grouped photos
 
+### API Rate Limit Protection
+- **Retry Logic**: Automatically retries failed geocoding requests up to 3 times
+- **Exponential Backoff**: Progressive delays between retries (2s ? 4s ? 8s)
+- **HTTP 429 Detection**: Specifically handles rate limit responses
+- **Graceful Degradation**: Returns "Unknown Location" after all retries exhausted
+- **Console Logging**: Informs user when retries are occurring
+- **Respectful API Usage**: Complies with Nominatim usage policies
+
 ### Error Handling
 - Files without EXIF ? uses creation date
 - Corrupted files ? log and continue
 - Geocoding failure ? "Unknown Location"
+- Rate limit (429) ? automatic retry with exponential backoff
 - Source folder not found ? fatal exception
 - Thread-safe error counting and logging
 
