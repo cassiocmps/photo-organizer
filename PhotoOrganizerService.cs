@@ -7,12 +7,20 @@ public class PhotoOrganizerProcessor
     private readonly HashSet<string> _processedHashes = new();
     private readonly GeocodingService _geocodingService;
     private readonly Dictionary<string, int> _folderCounters = new();
+    private readonly object _hashLock = new();
+    private readonly object _counterLock = new();
+    private readonly SemaphoreSlim _semaphore;
+    private int _processed;
+    private int _duplicates;
+    private int _errors;
 
     public PhotoOrganizerProcessor(string sourcePath, string destPath)
     {
         _sourcePath = sourcePath;
         _destPath = destPath;
         _geocodingService = new GeocodingService();
+        var maxDegreeOfParallelism = Environment.ProcessorCount;
+        _semaphore = new SemaphoreSlim(maxDegreeOfParallelism, maxDegreeOfParallelism);
     }
 
     public async Task ProcessPhotosAsync()
@@ -29,46 +37,27 @@ public class PhotoOrganizerProcessor
             .ToList();
 
         Console.WriteLine($"Found {files.Count} images to process.");
+        Console.WriteLine($"Using {Environment.ProcessorCount} threads for parallel processing.");
         Console.WriteLine();
 
-        int processed = 0;
-        int duplicates = 0;
-        int errors = 0;
+        _processed = 0;
+        _duplicates = 0;
+        _errors = 0;
 
-        foreach (var file in files)
+        var tasks = files.Select(async file =>
         {
-            processed++;
-            Console.Write($"\rProcessing {processed}/{files.Count}... ");
-
+            await _semaphore.WaitAsync();
             try
             {
-                var metadata = MetadataReader.ExtractMetadata(file);
-                
-                if (metadata == null)
-                {
-                    errors++;
-                    continue;
-                }
-
-                if (_processedHashes.Contains(metadata.FileHash))
-                {
-                    duplicates++;
-                    Console.WriteLine();
-                    Console.WriteLine($"  ? Duplicate found: {Path.GetFileName(file)}");
-                    continue;
-                }
-
-                _processedHashes.Add(metadata.FileHash);
-
-                await ProcessPhotoAsync(file, metadata);
+                await ProcessFileAsync(file, files.Count);
             }
-            catch (Exception ex)
+            finally
             {
-                errors++;
-                Console.WriteLine();
-                Console.WriteLine($"  ? Error processing {Path.GetFileName(file)}: {ex.Message}");
+                _semaphore.Release();
             }
-        }
+        });
+
+        await Task.WhenAll(tasks);
 
         Console.WriteLine();
         Console.WriteLine();
@@ -76,10 +65,69 @@ public class PhotoOrganizerProcessor
         Console.WriteLine("PROCESSING SUMMARY");
         Console.WriteLine("???????????????????????????????????????");
         Console.WriteLine($"Total files: {files.Count}");
-        Console.WriteLine($"Successfully processed: {processed - duplicates - errors}");
-        Console.WriteLine($"Duplicates ignored: {duplicates}");
-        Console.WriteLine($"Errors: {errors}");
+        Console.WriteLine($"Successfully processed: {_processed - _duplicates - _errors}");
+        Console.WriteLine($"Duplicates ignored: {_duplicates}");
+        Console.WriteLine($"Errors: {_errors}");
         Console.WriteLine("???????????????????????????????????????");
+    }
+
+    private async Task ProcessFileAsync(string file, int totalFiles)
+    {
+        int currentProcessed;
+        
+        lock (_counterLock)
+        {
+            _processed++;
+            currentProcessed = _processed;
+        }
+
+        Console.Write($"\rProcessing {currentProcessed}/{totalFiles}... ");
+
+        try
+        {
+            var metadata = MetadataReader.ExtractMetadata(file);
+            
+            if (metadata == null)
+            {
+                lock (_counterLock)
+                {
+                    _errors++;
+                }
+                return;
+            }
+
+            bool isDuplicate;
+            lock (_hashLock)
+            {
+                isDuplicate = _processedHashes.Contains(metadata.FileHash);
+                if (!isDuplicate)
+                {
+                    _processedHashes.Add(metadata.FileHash);
+                }
+            }
+
+            if (isDuplicate)
+            {
+                lock (_counterLock)
+                {
+                    _duplicates++;
+                }
+                Console.WriteLine();
+                Console.WriteLine($"  ? Duplicate found: {Path.GetFileName(file)}");
+                return;
+            }
+
+            await ProcessPhotoAsync(file, metadata);
+        }
+        catch (Exception ex)
+        {
+            lock (_counterLock)
+            {
+                _errors++;
+            }
+            Console.WriteLine();
+            Console.WriteLine($"  ? Error processing {Path.GetFileName(file)}: {ex.Message}");
+        }
     }
 
     private async Task ProcessPhotoAsync(string sourceFile, PhotoMetadata metadata)
@@ -108,26 +156,37 @@ public class PhotoOrganizerProcessor
         }
 
         var destinationFolder = Path.Combine(_destPath, folderName);
-        System.IO.Directory.CreateDirectory(destinationFolder);
-
-        if (!_folderCounters.ContainsKey(destinationFolder))
+        
+        lock (_counterLock)
         {
-            _folderCounters[destinationFolder] = 0;
+            System.IO.Directory.CreateDirectory(destinationFolder);
         }
 
-        _folderCounters[destinationFolder]++;
-        var counter = _folderCounters[destinationFolder];
+        int counter;
+        lock (_counterLock)
+        {
+            if (!_folderCounters.ContainsKey(destinationFolder))
+            {
+                _folderCounters[destinationFolder] = 0;
+            }
+
+            _folderCounters[destinationFolder]++;
+            counter = _folderCounters[destinationFolder];
+        }
 
         var datePrefix = metadata.DateTaken.ToString("yyyy-MM-dd");
         var newFileName = $"{datePrefix}_IMG{counter:D4}{metadata.FileExtension}";
         var destinationPath = Path.Combine(destinationFolder, newFileName);
 
-        while (File.Exists(destinationPath))
+        lock (_counterLock)
         {
-            _folderCounters[destinationFolder]++;
-            counter = _folderCounters[destinationFolder];
-            newFileName = $"{datePrefix}_IMG{counter:D4}{metadata.FileExtension}";
-            destinationPath = Path.Combine(destinationFolder, newFileName);
+            while (File.Exists(destinationPath))
+            {
+                _folderCounters[destinationFolder]++;
+                counter = _folderCounters[destinationFolder];
+                newFileName = $"{datePrefix}_IMG{counter:D4}{metadata.FileExtension}";
+                destinationPath = Path.Combine(destinationFolder, newFileName);
+            }
         }
 
         File.Copy(sourceFile, destinationPath, false);
