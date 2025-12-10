@@ -1,24 +1,24 @@
 # Photo Organizer - Smart Photo Backup Organizer
 
-## ?? Description
+## Description
 
 Console application in C# .NET 10 for intelligently organizing photo backups, with hash-based deduplication, EXIF metadata extraction, economical geocoding, and automatic organization by date and location.
 
-## ?? Features
+## Features
 
-### ? Smart Deduplication (SHA-256)
+### Smart Deduplication (SHA-256)
 - Calculates SHA-256 hash for each file
 - Automatically ignores duplicates (even with different names)
 - Logs found duplicates
 - Thread-safe hash tracking
 
-### ?? Metadata Extraction
+### Metadata Extraction
 - Reads photo date via EXIF (`DateTimeOriginal`)
 - Fallback to file creation date if EXIF not available
 - Extracts GPS coordinates (Latitude/Longitude)
 - Supports multiple formats: JPG, JPEG, PNG, HEIC, HEIF, TIFF, BMP, GIF
 
-### ?? Economical Geocoding (Spatial Caching)
+### Economical Geocoding (Spatial Caching)
 - **Smart Cache**: Before calling API, checks in-memory cache
 - **Haversine Formula**: Calculates distance between coordinates
 - **Reuse**: If distance < 10km, reuses city from cache
@@ -28,33 +28,34 @@ Console application in C# .NET 10 for intelligently organizing photo backups, wi
 - **Custom User-Agent**: Required by Nominatim
 - **Thread-safe caching**: Safe for concurrent access
 
-### ? Multithreaded Processing
+### Multithreaded Processing
 - **Parallel Processing**: Uses all available CPU cores
 - **Thread-Safe**: All shared resources protected with locks
 - **SemaphoreSlim**: Controls maximum concurrent operations
 - **Performance**: Significantly faster for large photo collections
 - **Auto-scaling**: Adapts to available processor count
 
-### ?? Automatic Organization
+### Automatic Organization
+
 **Folder Structure:**
 ```
 {destPath}/
-  ??? 2023/
-  ?   ??? 2023-03-15_IMG0001.jpg
-  ?   ??? 2023-08-22_IMG0002.jpg
-  ??? 2023 - Los Angeles/
-  ?   ??? 2023-08-10_IMG0001.jpg
-  ?   ??? 2023-08-11_IMG0002.jpg
-  ??? 2024/
-  ?   ??? 2024-12-01_IMG0001.jpg
-  ?   ??? 2024-12-25_IMG0002.jpg
-  ??? 2024 - New York/
-  ?   ??? 2024-07-10_IMG0001.jpg
-  ?   ??? 2024-07-11_IMG0002.jpg
-  ??? 2024 - San Francisco/
-      ??? 2024-05-20_IMG0001.jpg
-      ??? 2024-05-20_IMG0002.jpg
-      ??? 2024-06-15_IMG0003.jpg
+  2023/
+    2023-03-15_IMG0001.jpg
+    2023-08-22_IMG0002.jpg
+  2023 - Los Angeles/
+    2023-08-10_IMG0001.jpg
+    2023-08-11_IMG0002.jpg
+  2024/
+    2024-12-01_IMG0001.jpg
+    2024-12-25_IMG0002.jpg
+  2024 - New York/
+    2024-07-10_IMG0001.jpg
+    2024-07-11_IMG0002.jpg
+  2024 - San Francisco/
+    2024-05-20_IMG0001.jpg
+    2024-05-20_IMG0002.jpg
+    2024-06-15_IMG0003.jpg
 ```
 
 **File Naming:**
@@ -66,13 +67,13 @@ Console application in C# .NET 10 for intelligently organizing photo backups, wi
 - Photos with GPS are saved in year-city folders (e.g., `2024 - New York/`)
 - All folders are at the same level (no nesting)
 
-### ?? Safety
+### Safety
 - Uses `File.Copy` (not Move) to preserve originals
 - Try/Catch for corrupted files
 - Robust error handling
 - Detailed final report
 
-## ?? Installation
+## Installation
 
 ### Prerequisites
 - .NET 10 SDK
@@ -87,7 +88,7 @@ Console application in C# .NET 10 for intelligently organizing photo backups, wi
 dotnet build
 ```
 
-## ?? Usage
+## Usage
 
 ### Syntax
 ```bash
@@ -132,73 +133,23 @@ dotnet run -- "C:\Photos\Backup" "C:\Photos\Organized"
 dotnet run -- "C:\Photos\Backup"
 ```
 
-## ?? Example Output
-
-```
-???????????????????????????????????????
-   PHOTO ORGANIZER - Smart Backup
-???????????????????????????????????????
-
-?? Source: C:\Photos\Backup
-?? Destination: C:\Photos\Organized
-
-Found 1523 images to process.
-Using 8 threads for parallel processing.
-
-Processing 150/1523...
-  ? Duplicate found: IMG_4567_copy.jpg
-Processing 523/1523...
-  ? Error processing corrupted_file.jpg: File corrupted
-Processing 850/1523...
-Rate limited geocoding (40.7128, -74.0060). Retrying attempt 2/3...
-
-Processing 1523/1523...
-
-???????????????????????????????????????
-PROCESSING SUMMARY
-???????????????????????????????????????
-Total files: 1523
-Successfully processed: 1487
-Duplicates ignored: 34
-Errors: 2
-???????????????????????????????????????
-
-? Processing completed successfully!
-```
-
 **Resulting Structure:**
-- Photos with GPS ? `{Year} - {City}/`
-- Photos without GPS ? `{Year}/`
+- Photos with GPS: `{Year} - {City}/`
+- Photos without GPS: `{Year}/`
 - All folders at the same level (no nesting)
 - Processed in parallel using multiple threads
 - Automatic retry on rate limit errors
 
-## ??? Architecture
-
-### Class Structure
-
-```
-PhotoOrganizer/
-?
-??? Program.cs                    # Entry point and argument validation
-??? PhotoOrganizerProcessor.cs    # Main orchestration
-??? PhotoMetadata.cs              # Record for photo data
-??? LocationCacheItem.cs          # Record for geocoding cache
-??? FileHasher.cs                 # SHA-256 calculation
-??? MetadataReader.cs             # EXIF extraction
-??? GeocodingService.cs           # Geocoding with spatial cache
-```
-
 ### Modern C# Features
-- ? Records (`PhotoMetadata`, `LocationCacheItem`)
-- ? Async/Await for API calls
-- ? Pattern Matching
-- ? Nullable Reference Types
-- ? Collection Expressions `[...]`
-- ? String Interpolation
-- ? LINQ
+- Records (`PhotoMetadata`, `LocationCacheItem`)
+- Async/Await for API calls
+- Pattern Matching
+- Nullable Reference Types
+- Collection Expressions `[...]`
+- String Interpolation
+- LINQ
 
-## ?? Technical Details
+## Technical Details
 
 ### Multithreading Architecture
 - **SemaphoreSlim**: Limits concurrent operations to processor count
@@ -211,40 +162,32 @@ PhotoOrganizer/
 
 ### Haversine Formula
 Calculates geodesic distance between two points on Earth's surface:
-```csharp
-d = 2R × arcsin(?(sin²(??/2) + cos(?1) × cos(?2) × sin²(??/2)))
+```
+d = 2R * arcsin(sqrt(sin²(delta_phi/2) + cos(phi1) * cos(phi2) * sin²(delta_lambda/2)))
 ```
 - R = 6371 km (Earth's radius)
-- ? = latitude in radians
-- ? = longitude in radians
+- phi = latitude in radians
+- lambda = longitude in radians
 
 ### Geocoding Cache
 1. For each photo with GPS, checks existing cache
 2. Calculates Haversine distance to each cache item
-3. If distance < 10km ? reuses city
-4. If not ? calls Nominatim API and adds to cache
+3. If distance < 10km: reuses city
+4. If not: calls Nominatim API and adds to cache
 5. **Result**: 95%+ reduction in API calls for grouped photos
 
 ### API Rate Limit Protection
 - **Retry Logic**: Automatically retries failed geocoding requests up to 3 times
-- **Exponential Backoff**: Progressive delays between retries (2s ? 4s ? 8s)
+- **Exponential Backoff**: Progressive delays between retries (2s -> 4s -> 8s)
 - **HTTP 429 Detection**: Specifically handles rate limit responses
 - **Graceful Degradation**: Returns "Unknown Location" after all retries exhausted
 - **Console Logging**: Informs user when retries are occurring
 - **Respectful API Usage**: Complies with Nominatim usage policies
 
 ### Error Handling
-- Files without EXIF ? uses creation date
-- Corrupted files ? log and continue
-- Geocoding failure ? "Unknown Location"
-- Rate limit (429) ? automatic retry with exponential backoff
-- Source folder not found ? fatal exception
+- Files without EXIF: uses creation date
+- Corrupted files: log and continue
+- Geocoding failure: "Unknown Location"
+- Rate limit (429): automatic retry with exponential backoff
+- Source folder not found: fatal exception
 - Thread-safe error counting and logging
-
-## ?? License
-
-Educational project - free use.
-
-## ????? Author
-
-Developed as a .NET Senior architecture example.
