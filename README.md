@@ -10,6 +10,7 @@ Console application in C# .NET 10 for intelligently organizing photo backups, wi
 - Calculates SHA-256 hash for each file
 - Automatically ignores duplicates (even with different names)
 - Logs found duplicates
+- Thread-safe hash tracking
 
 ### ?? Metadata Extraction
 - Reads photo date via EXIF (`DateTimeOriginal`)
@@ -24,6 +25,14 @@ Console application in C# .NET 10 for intelligently organizing photo backups, wi
 - **OpenStreetMap API (Nominatim)**: Free and respectful geocoding
 - **1-second delay**: Respects Nominatim API limits
 - **Custom User-Agent**: Required by Nominatim
+- **Thread-safe caching**: Safe for concurrent access
+
+### ? Multithreaded Processing
+- **Parallel Processing**: Uses all available CPU cores
+- **Thread-Safe**: All shared resources protected with locks
+- **SemaphoreSlim**: Controls maximum concurrent operations
+- **Performance**: Significantly faster for large photo collections
+- **Auto-scaling**: Adapts to available processor count
 
 ### ?? Automatic Organization
 **Folder Structure:**
@@ -133,6 +142,7 @@ dotnet run -- "C:\Photos\Backup"
 ?? Destination: C:\Photos\Organized
 
 Found 1523 images to process.
+Using 8 threads for parallel processing.
 
 Processing 150/1523...
   ? Duplicate found: IMG_4567_copy.jpg
@@ -157,6 +167,7 @@ Errors: 2
 - Photos with GPS ? `{Year} - {City}/`
 - Photos without GPS ? `{Year}/`
 - All folders at the same level (no nesting)
+- Processed in parallel using multiple threads
 
 ## ??? Architecture
 
@@ -185,6 +196,15 @@ PhotoOrganizer/
 
 ## ?? Technical Details
 
+### Multithreading Architecture
+- **SemaphoreSlim**: Limits concurrent operations to processor count
+- **Lock Objects**: Three separate locks for different resources:
+  - `_hashLock`: Protects duplicate detection hash set
+  - `_counterLock`: Protects folder counters and file system operations
+  - Thread-safe increment of statistics counters
+- **Task Parallel Library**: Uses `Task.WhenAll` for efficient async processing
+- **Performance**: Can process hundreds of photos per minute on modern hardware
+
 ### Haversine Formula
 Calculates geodesic distance between two points on Earth's surface:
 ```csharp
@@ -206,6 +226,7 @@ d = 2R × arcsin(?(sin²(??/2) + cos(?1) × cos(?2) × sin²(??/2)))
 - Corrupted files ? log and continue
 - Geocoding failure ? "Unknown Location"
 - Source folder not found ? fatal exception
+- Thread-safe error counting and logging
 
 ## ?? License
 
