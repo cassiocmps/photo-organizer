@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PhotoOrganizer": {
+      "commandName": "Project",
+      "commandLineArgs": "\"D:/BACKUP ANA\""
+    }
+  }
+}
